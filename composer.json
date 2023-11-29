@@ -1,8 +1,6 @@
 {
     "name": "vendor/discordbot",
     "require": {
-        "ext-json": "*",
-        "ext-zlib": "*",
         "team-reflex/discord-php": "^7.3",
         "react/react": "^1.4"
     },
@@ -14,7 +12,7 @@
     "authors": [
         {
             "name": "FabienRozier",
-            "email": "fabienrozier60@gmail.com"
+            "email": "fabien.rozier@lyceestvincent.fr"
         }
     ]
 }
