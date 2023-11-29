@@ -52,6 +52,14 @@ $discord->registerCommand('discordstatus', function (Message $message, $params) 
 $discord->registerCommand('uploadfile', function (Message $message, $params) use ($browser, $discord) {
     coroutine(function () use ($message, $browser, $discord) {
 
+        // Read the JSON file  
+        $json = file_get_contents('upload_info.json'); 
+        
+        // Decode the JSON file 
+        $json_data = json_decode($json,true); 
+        
+        // Display data 
+        print_r($json_data[0]["file_name"]); 
         $filePath = file_get_contents(__DIR__ . '/bot_input.txt');
         
         $builder = MessageBuilder::new();
@@ -66,7 +74,9 @@ $discord->registerCommand('uploadfile', function (Message $message, $params) use
     }, $message, $params);
 });
 
+  
 
+  
 
 // Start the Bot (must be at the bottom)
 $discord->run(); 
