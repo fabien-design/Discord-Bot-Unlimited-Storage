@@ -1,6 +1,9 @@
 <?php
 include 'vendor/autoload.php';
 
+include "src/DotEnv.php";
+(new DotEnv(__DIR__ . '/.env'))->load();
+
 // // Import classes, install a LSP such as Intelephense to auto complete imports
 use Discord\DiscordCommandClient;
 use Discord\Builders\MessageBuilder;
@@ -10,13 +13,13 @@ use Psr\Http\Message\ResponseInterface;
 use React\Http\Browser;
 use function React\Async\coroutine;
 
+
 // Create a $discord BOT
 $discord = new DiscordCommandClient([
-    'token' => 'MTE3OTQ5ODc3MTU4Mzg3NzE0MQ.G-Hi-Z.9OOq3G4zmUob4dcqkukzXX1mIPxYMhBFx_7Hj4', // Put your Bot token here from https://discord.com/developers/applications/
+    'token' => getenv('BOT_TOKEN'), // Put your Bot token here from https://discord.com/developers/applications/
 ]);
 // Create a $browser with same loop as $discord
 $browser = new Browser(null, $discord->getLoop());
-
 
 
 
