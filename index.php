@@ -34,6 +34,10 @@ include "src/DotEnv.php";
 //     echo "Message sent successfully!";
 // }
 
+$base64Binary = file_get_contents('testfile.txt'); 
+file_put_contents('image.png', base64_decode($base64Binary)); 
+
+
 function fsplit($file, $maxSize = 20 * 1024 * 1024) {
     // Open the file to read
     $fileHandle = fopen($file, 'rb');
@@ -104,10 +108,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_FILES["file"])) {
                 // Save the information to a JSON file
                 saveUploadInfo($uploadInfo);
 
-                // Iterate over each part and upload it
-                foreach ($file_parts as $file_part) {
-                    interactWithDiscordBot($file_part, $file);
-                }
+                
+                interactWithDiscordBot();
 
                 echo "File uploaded successfully!";
 
@@ -123,8 +125,36 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_FILES["file"])) {
     }
 } 
 
-function interactWithDiscordBot($filePath, $file) {
+function interactWithDiscordBot() {
+    $botId = getenv('BOT_ID');
+    $message = "<@{$botId}> uploadfile";
 
+    // Replace YOUR_WEBHOOK_URL with the actual webhook URL
+    $webhookUrl = getenv('WEBHOOK_URL');
+    //Data to be sent in the POST request
+    $data = [
+        "content" => $message,
+    ];
+
+    // Use cURL to send a POST request to the Discord webhook URL
+    $ch = curl_init($webhookUrl);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+    // Execute the cURL request
+    $response = curl_exec($ch);
+
+    // Close cURL session
+    curl_close($ch);
+
+    // Check for errors or handle the response as needed
+    if ($response === false) {
+        echo "Error sending message.";
+    } else {
+        echo "Message sent successfully!";
+    }
 
 }
 

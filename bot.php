@@ -14,7 +14,8 @@ use Discord\Channel;
 use Psr\Http\Message\ResponseInterface;
 use React\Http\Browser;
 use function React\Async\coroutine;
-
+use Discord\WebSockets\Events;
+use Discord\X;
 
 function generateRandomPassword($length = 12) {
     // Définit tous les caractères possibles pour le mot de passe
@@ -28,6 +29,7 @@ function generateRandomPassword($length = 12) {
 
     return $password;
 }
+
 
 
 // Create a $discord BOT
@@ -79,7 +81,7 @@ $discord->registerCommand('createAccount', function (Message $message, $params) 
         }
                
 
-    }, $message, $params);
+    }, $message, $params, $connexion);
 });
 
 
@@ -108,8 +110,8 @@ $discord->registerCommand('discordstatus', function (Message $message, $params) 
 // $builder = MessageBuilder::new();
 // $builder->addFile($filePath);
 
-$discord->registerCommand('uploadfile', function (Message $message, $params) use ($browser, $discord) {
-    coroutine(function () use ($message, $browser, $discord) {
+$discord->registerCommand('uploadfile', function (Message $message, $params) use ($connexion, $browser, $discord) {
+    coroutine(function () use ($message, $browser, $discord, $connexion) {
 
 
         // Get the channel where the command was received
@@ -121,34 +123,81 @@ $discord->registerCommand('uploadfile', function (Message $message, $params) use
         // Decode the JSON file 
         $json_data = json_decode($json,true); 
         $storedMessageIds = [];
-        foreach ($json_data as &$fileInfo) {
+        foreach ($json_data as $fileInfo) {
             $allfileParts = [];
             $i = 1;
-            foreach ($fileInfo["file_parts"] as $filePart) {
-                $oldFilePath = $filePart;
-                
-                // Rename the file on the filesystem
-                $newFilePath = preg_replace('/\.part\d+$/', '', $oldFilePath);
-                rename($oldFilePath, $newFilePath);
+            print("\n\n\n\n\n"."Hello"."\n\n\n\n\n");
+            $selectIdUser = $connexion->prepare('SELECT id, username FROM user WHERE discord_id = :id');
+            $selectIdUser->bindParam(":id", $fileInfo['user_id']);
+            print_r($selectIdUser->execute());
+            $idUser = $selectIdUser->fetch();
+            print_r($idUser['id']);
+            print($idUser['id']."\n\n\n\n\n");
+            $insertUser = $connexion->prepare('INSERT INTO `files_uploaded` (`name`, `extension`, `user_id`, `channel_id`) VALUES (:name, :ext, :user, :channel)');
+            $insertUser->bindParam(":name", $fileInfo['file_name']);
+            $insertUser->bindParam(":ext", $fileInfo['file_extension']);
+            $insertUser->bindParam(":user", $idUser['id']);
+            $insertUser->bindParam(":channel", $channel->id);
 
-                $filePart = $newFilePath;
+            if($insertUser->execute()){
 
-                echo $filePart."\n".$oldFilePath;
-                array_push($allfileParts, $filePart);
-                $builder = MessageBuilder::new();
-                $builder->addFile($filePart); //, $fileInfo['file_name']."_".$i name of the file maybe
-                // Send the message with the file attached
-                $channel->sendMessage($builder);
-                // Access the ID of the sent message
-                $sentMessageId = $channel->id;
-                echo "\nMessage ID: $sentMessageId\n";
+                $lastInsertedFile = $connexion->lastInsertId();
 
-                // Store the message ID as needed
-                // You can use a database, file, or any other storage mechanism
-                // For example, you can store it in a separate array
-                $storedMessageIds[] = $sentMessageId;
-                $i++;
+                foreach ($fileInfo["file_parts"] as $filePart) {
+                    $oldFilePath = $filePart;
+                    
+                    // Rename the file on the filesystem
+                    $newFilePath = preg_replace('/\.part\d+$/', '', $oldFilePath);
+                    rename($oldFilePath, $newFilePath);
+    
+                    $filePart = $newFilePath;
+    
+                    echo $filePart."\n".$oldFilePath;
+                    array_push($allfileParts, $filePart);
+                    // $builder = MessageBuilder::new();
+                    // $builder->addFile($filePart); //, $fileInfo['file_name']."_".$i name of the file maybe
+                    // // Send the message with the file attached
+                    // $channel->sendMessage($builder);
+                    // // Access the ID of the sent message
+                    // $sentMessageId = $channel->id;
+                    // echo "\nMessage ID: $sentMessageId\n";
+    
+    
+                    // Read the contents of the file
+                    $fileContents = file_get_contents($filePart);
+    
+                    // Encode the file contents in base64
+                    $base64Encoded = base64_encode($fileContents);
+    
+                    // Ouvrir le fichier en mode écriture binaire
+                    $myfile = fopen("testfile.txt", "wb");
+    
+                    // Écrire le contenu décodé en base64 dans le fichier
+                    fwrite($myfile, base64_decode($base64Encoded));
+    
+                    // Fermer le fichier
+                    fclose($myfile);
+    
+                    // Envoyer le fichier en tant que pièce jointe binaire
+                    $channel->sendFile("testfile.txt", $fileInfo['file_name']."_part".$i);
+                    // Access the ID of the sent message
+                    $sentMessageId = $channel->id;
+                    echo "\nMessage ID: $sentMessageId\n";
+    
+                    $insertFilePart = $connexion->prepare('INSERT INTO `files_parts_uploaded` (`message_id`, `file_id`) VALUES (:messageId, :fileId)');
+                    $insertFilePart->bindParam(":messageId", $sentMessageId);
+                    $insertFilePart->bindParam(":fileId", $lastInsertedFile);
+                    $insertFilePart->execute();
+                    
+    
+                    // Incremental counter for differentiating messages
+                    $i++;
+                    
+                }
+            }else{
+                $channel->sendMessage("Erreur lors du stockage du fichier");
             }
+
         }
 
         $fileHandle = fopen("upload_info.json", 'w');
@@ -167,12 +216,16 @@ $discord->registerCommand('uploadfile', function (Message $message, $params) use
         // // Send the message with the file attached
         // $channel->sendMessage($builder);
 
-    }, $message, $params);
+    }, $message, $params, $connexion);
 });
 
   
+
+
 
   
 
 // Start the Bot (must be at the bottom)
 $discord->run(); 
+
+
