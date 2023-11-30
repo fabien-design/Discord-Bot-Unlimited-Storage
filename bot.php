@@ -111,25 +111,61 @@ $discord->registerCommand('discordstatus', function (Message $message, $params) 
 $discord->registerCommand('uploadfile', function (Message $message, $params) use ($browser, $discord) {
     coroutine(function () use ($message, $browser, $discord) {
 
+
+        // Get the channel where the command was received
+        $channel = $message->channel;
+
         // Read the JSON file  
         $json = file_get_contents('upload_info.json'); 
         
         // Decode the JSON file 
         $json_data = json_decode($json,true); 
-        
-        // Display data 
-        print_r($json_data[0]["file_name"]); 
-        
-        $filePath = file_get_contents(__DIR__ . '/bot_input.txt');
-        
-        $builder = MessageBuilder::new();
-        $builder->addFile($filePath);
-        
-        // Get the channel where the command was received
-        $channel = $message->channel;
+        $storedMessageIds = [];
+        foreach ($json_data as &$fileInfo) {
+            $allfileParts = [];
+            $i = 1;
+            foreach ($fileInfo["file_parts"] as $filePart) {
+                $oldFilePath = $filePart;
+                
+                // Rename the file on the filesystem
+                $newFilePath = preg_replace('/\.part\d+$/', '', $oldFilePath);
+                rename($oldFilePath, $newFilePath);
 
-        // Send the message with the file attached
-        $channel->sendMessage($builder);
+                $filePart = $newFilePath;
+
+                echo $filePart."\n".$oldFilePath;
+                array_push($allfileParts, $filePart);
+                $builder = MessageBuilder::new();
+                $builder->addFile($filePart); //, $fileInfo['file_name']."_".$i name of the file maybe
+                // Send the message with the file attached
+                $channel->sendMessage($builder);
+                // Access the ID of the sent message
+                $sentMessageId = $channel->id;
+                echo "\nMessage ID: $sentMessageId\n";
+
+                // Store the message ID as needed
+                // You can use a database, file, or any other storage mechanism
+                // For example, you can store it in a separate array
+                $storedMessageIds[] = $sentMessageId;
+                $i++;
+            }
+        }
+
+        $fileHandle = fopen("upload_info.json", 'w');
+        // Vérifie si le fichier est ouvert avec succès
+        if ($fileHandle) {
+            // Écrit une chaîne vide dans le fichier
+            fwrite($fileHandle, '');
+            // Ferme le fichier
+            fclose($fileHandle);
+        }
+
+        // $builder = MessageBuilder::new();
+        // $builder->addFile($filePath);
+        
+
+        // // Send the message with the file attached
+        // $channel->sendMessage($builder);
 
     }, $message, $params);
 });

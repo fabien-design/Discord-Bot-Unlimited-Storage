@@ -85,7 +85,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_FILES["file"])) {
 
     if ($file["error"] === UPLOAD_ERR_OK) {
         // Check file size (max 25MB)
-        if ($file["size"] <= 25 * 1024 * 1024) {
+        if ($file["size"] <= 60 * 1024 * 1024) {
             // Move the uploaded file to a location accessible by your bot
             $destination = __DIR__ . "/uploads/" . basename($file["name"]);
 
@@ -160,7 +160,7 @@ function saveUploadInfo($uploadInfo) {
 <body>
      <h1>Discord Bot File Uploader</h1>
     <form action="" method="post" enctype="multipart/form-data">
-        <label for="file">Choose a file (max 25MB):</label>
+        <label for="file">Choose a file (max 60MB):</label>
         <input type="file" name="file" id="file">
         <button type="submit" name="submit">Upload</button>
     </form>
