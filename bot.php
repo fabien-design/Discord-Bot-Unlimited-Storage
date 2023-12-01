@@ -179,15 +179,16 @@ $discord->registerCommand('uploadfile', function (Message $message, $params) use
                     fclose($myfile);
     
                     // Envoyer le fichier en tant que pièce jointe binaire
-                    $channel->sendFile("testfile.txt", $fileInfo['file_name']."_part".$i);
-                    // Access the ID of the sent message
-                    $sentMessageId = $channel->id;
-                    echo "\nMessage ID: $sentMessageId\n";
-    
-                    $insertFilePart = $connexion->prepare('INSERT INTO `files_parts_uploaded` (`message_id`, `file_id`) VALUES (:messageId, :fileId)');
-                    $insertFilePart->bindParam(":messageId", $sentMessageId);
-                    $insertFilePart->bindParam(":fileId", $lastInsertedFile);
-                    $insertFilePart->execute();
+                    $channel->sendFile("testfile.txt", $fileInfo['file_name']."_part".$i.".txt" )->done(function (Message $message) use ($connexion, $lastInsertedFile) {
+                        var_dump("\nMessage ID: $message \n");
+                        $sentMessageId = $message->id;
+                        var_dump("\nMessage ID: $sentMessageId \n");
+                        $insertFilePart = $connexion->prepare('INSERT INTO `files_parts_uploaded` (`message_id`, `file_id`) VALUES (:messageId, :fileId)');
+                        $insertFilePart->bindParam(":messageId", $sentMessageId);
+                        $insertFilePart->bindParam(":fileId", $lastInsertedFile);
+                        $insertFilePart->execute();
+                    });
+                    
                     
     
                     // Incremental counter for differentiating messages
