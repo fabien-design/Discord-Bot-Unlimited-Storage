@@ -17,6 +17,7 @@ use function React\Async\coroutine;
 use Discord\WebSockets\Events;
 use Discord\X;
 
+
 function generateRandomPassword($length = 12) {
     // Définit tous les caractères possibles pour le mot de passe
     $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@!';
@@ -53,7 +54,7 @@ $discord->registerCommand('createAccount', function (Message $message, $params) 
                 if(empty($users)){
                     $message->author->sendMessage($message->author . " vous n'avez pas de compte associé" );
                     $password = generateRandomPassword();
-                    $passwordHash = password_hash($password, PASSWORD_ARGON2ID);
+                    $passwordHash = password_hash($password, PASSWORD_BCRYPT);
                     $username = $message->author->username;
                     $discordId = $message->author->id;
                     $insertUser = $connexion->prepare('INSERT INTO `user` (`username`, `discord_id`, `password`) VALUES (:user, :discord, :pass)');
@@ -105,10 +106,6 @@ $discord->registerCommand('discordstatus', function (Message $message, $params) 
     }, $message, $params);
 });
 
-// $filePath = file_get_contents(__DIR__ . '/bot_input.txt');
-
-// $builder = MessageBuilder::new();
-// $builder->addFile($filePath);
 
 $discord->registerCommand('uploadfile', function (Message $message, $params) use ($connexion, $browser, $discord) {
     coroutine(function () use ($message, $browser, $discord, $connexion) {
@@ -124,62 +121,51 @@ $discord->registerCommand('uploadfile', function (Message $message, $params) use
         $json_data = json_decode($json,true); 
         $storedMessageIds = [];
         foreach ($json_data as $fileInfo) {
+            echo "Processing file: {$fileInfo['file_name']}\n";
             $allfileParts = [];
             $i = 1;
-            print("\n\n\n\n\n"."Hello"."\n\n\n\n\n");
             $selectIdUser = $connexion->prepare('SELECT id, username FROM user WHERE discord_id = :id');
             $selectIdUser->bindParam(":id", $fileInfo['user_id']);
             print_r($selectIdUser->execute());
             $idUser = $selectIdUser->fetch();
-            print_r($idUser['id']);
-            print($idUser['id']."\n\n\n\n\n");
-            $insertUser = $connexion->prepare('INSERT INTO `files_uploaded` (`name`, `extension`, `user_id`, `channel_id`) VALUES (:name, :ext, :user, :channel)');
+            $date = new \DateTime();
+            $insertUser = $connexion->prepare('INSERT INTO `files_uploaded` (`name`, `extension`, `user_id`, `channel_id`,`created_at`) VALUES (:name, :ext, :user, :channel, :created_at)');
             $insertUser->bindParam(":name", $fileInfo['file_name']);
             $insertUser->bindParam(":ext", $fileInfo['file_extension']);
             $insertUser->bindParam(":user", $idUser['id']);
             $insertUser->bindParam(":channel", $channel->id);
+            $insertUser->bindParam(":created_at", $date);
 
             if($insertUser->execute()){
 
                 $lastInsertedFile = $connexion->lastInsertId();
 
                 foreach ($fileInfo["file_parts"] as $filePart) {
+                    echo "Processing file part: $filePart\n";
+
                     $oldFilePath = $filePart;
                     
                     // Rename the file on the filesystem
                     $newFilePath = preg_replace('/\.part\d+$/', '', $oldFilePath);
                     rename($oldFilePath, $newFilePath);
-    
+
                     $filePart = $newFilePath;
     
                     echo $filePart."\n".$oldFilePath;
                     array_push($allfileParts, $filePart);
-                    // $builder = MessageBuilder::new();
-                    // $builder->addFile($filePart); //, $fileInfo['file_name']."_".$i name of the file maybe
-                    // // Send the message with the file attached
-                    // $channel->sendMessage($builder);
-                    // // Access the ID of the sent message
-                    // $sentMessageId = $channel->id;
-                    // echo "\nMessage ID: $sentMessageId\n";
-    
     
                     // Read the contents of the file
                     $fileContents = file_get_contents($filePart);
-    
-                    // Encode the file contents in base64
-                    $base64Encoded = base64_encode($fileContents);
-    
-                    // Ouvrir le fichier en mode écriture binaire
-                    $myfile = fopen("testfile.txt", "wb");
-    
-                    // Écrire le contenu décodé en base64 dans le fichier
-                    fwrite($myfile, base64_decode($base64Encoded));
-    
-                    // Fermer le fichier
-                    fclose($myfile);
-    
+
+                    // Create a temporary file
+                    $tempFile = tempnam(sys_get_temp_dir(), 'discord_temp');
+                    
+                    // Write the contents to the temporary file
+                    file_put_contents($tempFile, $fileContents);
+                    
                     // Envoyer le fichier en tant que pièce jointe binaire
-                    $channel->sendFile("testfile.txt", $fileInfo['file_name']."_part".$i.".txt" )->done(function (Message $message) use ($connexion, $lastInsertedFile) {
+                    $channel->sendFile($tempFile, $fileInfo['file_name']."_part".$i.".txt" )
+                    ->done(function (Message $message) use ($connexion, $lastInsertedFile) {
                         var_dump("\nMessage ID: $message \n");
                         $sentMessageId = $message->id;
                         var_dump("\nMessage ID: $sentMessageId \n");
@@ -193,6 +179,7 @@ $discord->registerCommand('uploadfile', function (Message $message, $params) use
     
                     // Incremental counter for differentiating messages
                     $i++;
+                    echo "Finished processing file: {$fileInfo['file_name']}\n";
                     
                 }
             }else{
@@ -208,6 +195,49 @@ $discord->registerCommand('uploadfile', function (Message $message, $params) use
             fwrite($fileHandle, '');
             // Ferme le fichier
             fclose($fileHandle);
+        }
+
+        // Chemin vers le dossier
+        $folderPath = 'uploads';
+
+        // Vérifie si le dossier existe
+        if (is_dir($folderPath)) {
+            // Obtient la liste des fichiers et dossiers dans le dossier
+            $files = scandir($folderPath);
+
+            // Boucle à travers les fichiers et dossiers
+            foreach ($files as $file) {
+                // Vérifie si le chemin est un fichier (et non un dossier)
+                if (is_file($folderPath . '/' . $file)) {
+                    // Supprime le fichier
+                    unlink($folderPath . '/' . $file);
+                }
+            }
+
+            echo "Contenu du dossier supprimé avec succès.";
+        } else {
+            echo "Le dossier n'existe pas.";
+        }
+        // Chemin vers le dossier
+        $folderPath = 'splits';
+
+        // Vérifie si le dossier existe
+        if (is_dir($folderPath)) {
+            // Obtient la liste des fichiers et dossiers dans le dossier
+            $files = scandir($folderPath);
+
+            // Boucle à travers les fichiers et dossiers
+            foreach ($files as $file) {
+                // Vérifie si le chemin est un fichier (et non un dossier)
+                if (is_file($folderPath . '/' . $file)) {
+                    // Supprime le fichier
+                    unlink($folderPath . '/' . $file);
+                }
+            }
+
+            echo "Contenu du dossier supprimé avec succès.";
+        } else {
+            echo "Le dossier n'existe pas.";
         }
 
         // $builder = MessageBuilder::new();

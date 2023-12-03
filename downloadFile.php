@@ -1,10 +1,24 @@
 <?php
+session_start();
 include 'vendor/autoload.php';
 include "src/DotEnv.php";
 (new DotEnv(__DIR__ . '/.env'))->load();
-
 include "includes/connexion_db.php";
 
+if(isset($_SESSION['connected']) && isset($_SESSION['userId']) && isset($_GET['idFile']) ){
+    if($_SESSION['connected'] === true && !empty($_SESSION['userId'])){
+        $id = (int)$_SESSION['userId'];
+        $getUser = $connexion->prepare("SELECT * FROM user WHERE id = :id");
+        $getUser->bindParam("id",$id); 
+        $getUser->execute();
+        $user = $getUser->fetch();
+
+    }else{
+        header("Location: index.php");
+    }
+}else{
+    header("Location: index.php");
+}
 
 $id = $_GET['idFile'];
 
@@ -13,12 +27,17 @@ $selectAllFilesParts->bindParam(":id", $id);
 $selectAllFilesParts->execute();
 $infos = $selectAllFilesParts->fetchAll();
 
-$webhookUrl = getenv('WEBHOOK_URL');
 $botToken = getenv('BOT_TOKEN');
-$indexFilePart = 1;
+
+// Créer un fichier zip temporaire
+$zipFile = tempnam(sys_get_temp_dir(), 'download_files');
+$zip = new \ZipArchive();
+$zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+
+// Variable pour stocker le contenu concaténé
+$concatenatedContent = '';
 
 foreach ($infos as $info) {
-
     $channelId = $info['channel_id'];
     $messageId = $info['message_id'];
 
@@ -45,21 +64,11 @@ foreach ($infos as $info) {
         if (!empty($attachments)) {
             $attachmentUrl = $attachments[0]['url'];
             $attachmentContents = file_get_contents($attachmentUrl);
+            // Concaténer le contenu sans le header
+            $concatenatedContent .= $attachmentContents;
 
-            // Envoi des en-têtes HTTP pour indiquer que le contenu est un téléchargement
-            header('Content-Description: File Transfer');
-            header('Content-Type: application/octet-stream');
-            header('Content-Disposition: attachment; filename="' . $info['name'] . "_" . $indexFilePart . "." . $info['extension'] . '"');
-            header('Expires: 0');
-            header('Cache-Control: must-revalidate');
-            header('Pragma: public');
-            header('Content-Length: ' . strlen($attachmentContents));
-            if($indexFilePart > 1){var_dump($info);die;}
-            // Sortie du contenu de l'attachement
-            echo $attachmentContents;
-
-            // Incrementer l'index pour le prochain fichier
-            $indexFilePart += 1;
+            // Ajouter le fichier à l'archive zip
+           
         } else {
             echo 'Aucun attachement trouvé dans le message.';
         }
@@ -69,10 +78,25 @@ foreach ($infos as $info) {
 
     curl_close($ch);
 }
-error_reporting(E_ALL);
-ini_set('display_errors', '1');
+$concatenatedContentDecode = base64_decode($concatenatedContent);
+$zip->addFromString($info['name'] . "_" . $info['id'] . "." . $info['extension'], $concatenatedContent);
+// Fermer l'archive zip
+$zip->close();
 
-die;
+// Envoi des en-têtes HTTP pour indiquer que le contenu est un téléchargement
+header('Content-Description: File Transfer');
+header('Content-Type: application/zip');
+header('Content-Disposition: attachment; filename=downloaded_files.zip');
+header('Expires: 0');
+header('Cache-Control: must-revalidate');
+header('Pragma: public');
+header('Content-Length: ' . filesize($zipFile));
 
-// Fin du script
+// Sortie du contenu de l'archive zip
+readfile($zipFile);
+
+// Supprimer le fichier zip temporaire
+unlink($zipFile);
+
+// Utilisez $concatenatedContent comme nécessaire
 ?>
